@@ -1,0 +1,98 @@
+---
+title: "Porverty_vs_score"
+author: "Siming Su"
+date: "2023-09-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## import data
+
+```{r cars}
+sch <- read.csv(here::here("data/nys_schools.csv"))
+cty <- read.csv(here::here("data/nys_acs.csv"))
+```
+
+#### Task 2: Explore your data
+
+Getting to know your data is a critical part of data analysis. Take the time to explore the structure of the two dataframes you have imported. What types of variables are there? Is there any missing data? How can you tell? What else do you notice about the data?
+
+```{r explore}
+names(sch)
+names(cty)
+sum(is.na(sch))
+sum(is.na(cty))
+```
+
+#### Task 3: Recoding and variable manipulation
+1. Deal with missing values, which are currently coded as `-99`.
+2. Create a categorical variable that groups counties into "high", "medium", and "low" poverty groups. Decide how you want to split up the groups and briefly explain your decision.
+3. The tests that the NYS Department of Education administers changes from time to time, so scale scores are not directly comparable year-to-year. Create a new variable that is the standardized z-score for math and English Language Arts (ELA) for each year (hint: group by year and use the `scale()` function)
+
+```{r pressure, echo=FALSE}
+## filter out -99 values
+sch = sch[(!rowSums(sch == -99) > 0) & (!rowSums(sch == "-99") > 0), ]
+cty = cty[(!rowSums(cty == -99) > 0) & (!rowSums(cty == "-99") > 0), ]
+
+## cut poverty by county_per_poverty
+summary(cty$county_per_poverty)
+pov_cut_high = 0.2
+pov_cut_low = 0.1
+cty$pov_cat = ifelse(cty$county_per_poverty > pov_cut_high, "high", ifelse(cty$county_per_poverty > pov_cut_low, "medium", "low"))
+
+
+sch <- sch %>% 
+  group_by(year) %>%
+  mutate(z_ela_score = scale(mean_ela_score), z_math_score = scale(mean_math_score))
+```
+
+#### Task 4: Merge datasets
+
+Create a dataset that merges variables from the schools dataset and the ACS dataset. Remember that you have learned multiple approaches on how to do this, and that you will have to decide how to combine the two data sets.
+
+```{r merge}
+tot = merge(sch, cty, by = c("county_name", "year"))
+tot
+```
+
+
+#### Task 5: Create summary tables
+
+Generate a few summary tables to help answer the questions you were originally asked.
+
+For example:
+
+1. For each county: total enrollment, percent of students qualifying for free or reduced price lunch, and percent of population in poverty.
+2. For the counties with the top 5 and bottom 5 poverty rate: percent of population in poverty, percent of students qualifying for free or reduced price lunch, mean reading score, and mean math score.
+
+```{r }
+info_table = tot %>%
+  group_by(county_name) %>%
+  summarize(across(c(total_enroll, per_free_lunch, per_reduced_lunch, county_per_poverty), list(mean)))
+
+info_table[order(info_table$total_enroll_1, decreasing = TRUE)[1:5],]$county_name
+info_table[order(info_table$total_enroll_1)[1:5],]$county_name
+```
+
+#### Task 6: Data visualization
+
+Using `plot` or `ggplot2`, create a few visualizations that you could share with your department.
+
+For example:
+
+1. The relationship between access to free/reduced price lunch and test performance, at the *school* level.
+2. Average test performance across *counties* with high, low, and medium poverty.
+
+
+```{r data viz}
+tot %>%
+  group_by(school_cd) %>%
+  mutate(per_free_lunch_by_school = mean(per_free_lunch), mean_ela_score_by_school = mean(mean_ela_score)) %>%
+  ggplot() +
+  geom_line(aes(per_free_lunch_by_school, mean_ela_score_by_school))
+
+```
